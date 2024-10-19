@@ -12,6 +12,12 @@ const (
 	TrafficDirectionUp    = "up"
 	TrafficDirectionDown  = "down"
 
+	MetricLogTargetName = "crash_log_request_target"
+	LogTargetLabelSrc   = "src"
+	LogTargetLabelDst   = "dst"
+	LogTargetLabelMatch = "match"
+	LogTargetLabelType  = "type"
+
 	MerticTrafficTotalName     = "crash_traffic_total"
 	TrafficTotalLabelDirection = "direction"
 	TrafficTotalDirectionUp    = "up"
