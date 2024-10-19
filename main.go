@@ -1,100 +1,91 @@
 package main
 
 import (
+	"crash_exporter/websocket"
 	"flag"
-	"fmt"
 	"log"
-	"os"
-	"os/signal"
+	"net/http"
+	"time"
 
-	"github.com/gorilla/websocket"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/collectors"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/sirupsen/logrus"
+	"github.com/yukitsune/lokirus"
 )
 
 type Flags struct {
+	Listen   string
 	Host     string
 	Token    string
 	LogLevel string
+
+	LokiServer string
 }
 
 func parseFlags() Flags {
 	var flags Flags
+	flag.StringVar(&flags.Listen, "listen", "0.0.0.0:9091", "Listen address")
 	flag.StringVar(&flags.Host, "host", "192.168.66.1:9999", "ShellCrash address (Required)")
 	flag.StringVar(&flags.Token, "token", "", "Crash token")
-	flag.StringVar(&flags.LogLevel, "log-level", "info", "LogLevel: debug|info|warning|error. Default: info.")
+	flag.StringVar(&flags.LogLevel, "log-level", "debug", "LogLevel: debug|info|warning|error. Default: info.")
+	flag.StringVar(&flags.LokiServer, "loki-server", "http://192.168.66.2:3100", "Loki server address")
 	flag.Parse()
 	return flags
 }
 
-func WsLogs(args *Flags) <-chan string {
-	url := fmt.Sprintf("ws://%s/logs?token=%s&level=%s", args.Host, args.Token, args.LogLevel)
-	log.Printf("connecting to %s", url)
+func getLoggerWithLoki(lokiAddr string) *logrus.Logger {
+	// Configure the Loki hook
+	opts := lokirus.NewLokiHookOptions().
+		// Grafana doesn't have a "panic" level, but it does have a "critical" level
+		// https://grafana.com/docs/grafana/latest/explore/logs-integration/
+		WithLevelMap(lokirus.LevelMap{logrus.PanicLevel: "critical"}).
+		WithFormatter(&logrus.JSONFormatter{}).
+		WithStaticLabels(lokirus.Labels{
+			"app": "crash-exporter",
+		})
 
-	conn, _, err := websocket.DefaultDialer.Dial(url, nil)
-	if err != nil {
-		log.Fatal("dial:", err)
-	}
-	// defer conn.Close()
-	conn.SetReadLimit(10 * 1024 * 1024)
+	hook := lokirus.NewLokiHookWithOpts(
+		lokiAddr,
+		opts,
+		logrus.InfoLevel,
+		logrus.WarnLevel,
+		logrus.ErrorLevel,
+		logrus.FatalLevel)
 
-	ch := make(chan string, 100)
-	go func() {
-		for {
-			_, message, err := conn.ReadMessage()
-			if err != nil {
-				log.Println("read error:", err)
-				return
-			}
-			ch <- string(message)
-		}
-	}()
-	return ch
+	// Configure the logger
+	logger := logrus.New()
+	logger.AddHook(hook)
+	return logger
 }
-
-func WsConnections(args *Flags) <-chan string {
-	url := fmt.Sprintf("ws://%s/connections?token=%s", args.Host, args.Token)
-	log.Printf("connecting to %s", url)
-
-	conn, _, err := websocket.DefaultDialer.Dial(url, nil)
-	if err != nil {
-		log.Fatal("dial:", err)
-	}
-	// defer conn.Close()
-	conn.SetReadLimit(10 * 1024 * 1024)
-
-	ch := make(chan string, 100)
-	go func() {
-		for {
-			_, message, err := conn.ReadMessage()
-			if err != nil {
-				log.Println("read error:", err)
-				return
-			}
-			ch <- string(message)
-		}
-	}()
-	return ch
-}
-
-// ws://192.168.66.1:9999/traffic?token=
 
 func main() {
 	args := parseFlags()
+	reg := prometheus.NewRegistry()
+	reg.MustRegister(
+		collectors.NewGoCollector(),
+		collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}),
+	)
+	logger := getLoggerWithLoki(args.LokiServer)
 
-	interrupt := make(chan os.Signal, 1)
-	signal.Notify(interrupt, os.Interrupt)
+	crash, err := websocket.NewCrash(args.Host, args.Token, reg, logger)
+	if err != nil {
+		log.Fatalln(err)
+	}
+	if err = crash.Registers(args.LogLevel); err != nil {
+		log.Fatalln(err)
+	}
 
-	chLog := WsLogs(&args)
-	chConn := WsConnections(&args)
+	// Expose the registered metrics via HTTP.
+	http.Handle("/metrics", promhttp.HandlerFor(reg, promhttp.HandlerOpts{
+		Registry: reg, EnableOpenMetrics: true}))
 
-	for {
-		select {
-		case s := <-chLog:
-			log.Printf("recv: %s", s)
-		case s := <-chConn:
-			log.Printf("recv: %s", s)
-		case <-interrupt:
-			log.Println("interrupt")
-			return
-		}
+	logger.Infof("Exporter started at %s/metrics", args.Listen)
+	server := &http.Server{
+		Addr:              args.Listen,
+		ReadHeaderTimeout: 1 * time.Second,
+	}
+	if err = server.ListenAndServe(); err != nil {
+		logger.Fatal(err)
 	}
 }
