@@ -39,6 +39,7 @@ fmt:
 
 clean:
 	go clean
+	@rm -f coverage.out coverage.html
 
 build:
 	go build -v -ldflags "$(LDFLAGS)" -o "$(TARGET)" .
@@ -51,9 +52,6 @@ coverage:
 	gocov report $(CURDIR)/coverage.out
 	if test -z "$$CI"; then \
 	  gocov-html $(CURDIR)/coverage.out > $(CURDIR)/coverage.html; \
-	  if which open &>/dev/null; then \
-	    open $(CURDIR)/coverage.html; \
-	  fi; \
 	fi
 
 doc:
