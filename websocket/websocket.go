@@ -4,6 +4,7 @@ package websocket
 import (
 	"crash_exporter/models"
 	"fmt"
+	"time"
 
 	"github.com/gorilla/websocket"
 	"github.com/prometheus/client_golang/prometheus"
@@ -63,12 +64,33 @@ func (c *BaseCrash) Connect(endpoint, params string) (*websocket.Conn, <-chan []
 			_, msg, errRead := conn.ReadMessage()
 			if errRead != nil {
 				c.logger.Errorf("Read(%s) failed: %v", url, errRead)
-				return
+
+				conn = c.reconnect(url)
+				if conn == nil {
+					c.logger.Fatalf("Retry reconnect(%s) failed", url)
+				}
+				c.logger.Infof("reconnect() success: %s", url)
 			}
 			ch <- msg
 		}
 	}()
 	return conn, ch, nil
+}
+
+func (c *BaseCrash) reconnect(url string) *websocket.Conn {
+	for i := range models.DefaultReconnectNum {
+		time.Sleep(models.DefaultReconnectWait)
+		c.logger.Warnf("[%d] Try connect to %s", i+1, url)
+
+		conn, _, err := websocket.DefaultDialer.Dial(url, nil)
+		if err != nil {
+			c.logger.Errorf("Dial(%s) error: %v", url, err)
+			continue
+		}
+		conn.SetReadLimit(models.DefaultWSReadLimit)
+		return conn
+	}
+	return nil
 }
 
 func (c *BaseCrash) GetToken() string {

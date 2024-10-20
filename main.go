@@ -40,6 +40,9 @@ func getLoggerWithLoki(lokiAddr string) *logrus.Logger {
 		// Grafana doesn't have a "panic" level, but it does have a "critical" level
 		// https://grafana.com/docs/grafana/latest/explore/logs-integration/
 		WithLevelMap(lokirus.LevelMap{logrus.PanicLevel: "critical"}).
+		WithStaticLabels(lokirus.Labels{
+			"service_name": "crash-exporter",
+		}).
 		WithFormatter(&logrus.JSONFormatter{})
 
 	hook := lokirus.NewLokiHookWithOpts(

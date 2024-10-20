@@ -12,6 +12,7 @@ import (
 var (
 	reNormalLog = regexp.MustCompile(`(?P<src>[\d.]+:\d+) --> (?P<dst>[^\s]+) match (?P<match>[^\s]+) using (?P<type>[^\[]+)`)   //nolint:lll
 	reErrorLog  = regexp.MustCompile(`dial (?P<type>[^\[\s]+)[^\)]+\) to (?P<dst>[^\s]+) error: [^:]+:[^:]+: (?P<match>[^\n]+)`) //nolint:lll
+	reDNSLog    = regexp.MustCompile(`\[(?P<match>DNS)\] (?P<dst>[^\s]+) -->`)
 )
 
 // RegisterLogs 订阅日志推送。
@@ -52,6 +53,7 @@ func (c *BaseCrash) RegisterLogs(logLevel string) error {
 				logType = "error"
 				target = c.MatchErrorLogTarget(obj.Payload)
 				if target == nil {
+					// TODO: [DNS] grafana.com --> 34.120.177.193
 					c.logger.Warnf("Unknown log: %+v", obj)
 					continue
 				}
@@ -85,12 +87,19 @@ func (c *BaseCrash) PrintLog(obj *models.WSLog) {
 
 func (c *BaseCrash) MatchNormalLogTarget(message string) *models.LogTarget {
 	matches := reNormalLog.FindStringSubmatch(message)
+	names := reNormalLog.SubexpNames()
+	if matches == nil {
+		// try DNS
+		matches = reDNSLog.FindStringSubmatch(message)
+		names = reDNSLog.SubexpNames()
+	}
 	if matches == nil {
 		return nil
 	}
 
-	result := &models.LogTarget{}
-	names := reNormalLog.SubexpNames()
+	result := &models.LogTarget{
+		Type: "DIRECT",
+	}
 	for i, value := range matches {
 		switch names[i] {
 		case "src":

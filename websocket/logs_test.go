@@ -20,6 +20,7 @@ func TestBaseCrash_MatchNormalLogTarget(t *testing.T) {
 		{"普通日志，使用代理", "[TCP] 192.168.0.215:26859 --> encrypted-tbn0.gstatic.com:443 match DomainSuffix(gstatic.com) using UseProxy[Proxy xx]", //nolint:lll
 			"&{Src:192.168.0.215:26859 Dst:encrypted-tbn0.gstatic.com:443 Match:DomainSuffix(gstatic.com) Type:UseProxy}"}, //nolint:lll
 		{"异常日志，超时", "[TCP] dial DIRECT (match Match/) to extensions-auth.uc.r.appspot.com:443 error: dial tcp4 142.250.72.180:443: i/o timeout", "<nil>"}, //nolint:lll
+		{"DNS日志", "[DNS] grafana.com --> 34.120.177.193", "&{Src: Dst:grafana.com Match:DNS Type:DIRECT}"},
 	}
 
 	Convey("MatchNormalLogTarget需要能正常提取日志", t, func() {
