@@ -15,11 +15,10 @@ import (
 )
 
 type Flags struct {
-	Listen   string
-	Host     string
-	Token    string
-	LogLevel string
-
+	Listen     string
+	Host       string
+	Token      string
+	LogLevel   string
 	LokiServer string
 }
 
