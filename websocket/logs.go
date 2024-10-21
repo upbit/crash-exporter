@@ -7,6 +7,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
+	"github.com/sirupsen/logrus"
 )
 
 var (
@@ -18,13 +19,11 @@ var (
 // RegisterLogs 订阅日志推送。
 func (c *BaseCrash) RegisterLogs(logLevel string) error {
 	// 注册指标
-	c.logTargetMertics = *promauto.NewCounterVec(prometheus.CounterOpts{
-		Name: models.MetricLogTargetName,
+	c.logMertics = *promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: models.MetricLogName,
 		Help: "The number of log(connection) from log system",
-	}, []string{
-		"LT", models.LogTargetLabelSrc, models.LogTargetLabelDst, models.LogTargetLabelMatch, models.LogTargetLabelType,
-	})
-	c.registry.MustRegister(c.logTargetMertics)
+	}, []string{models.LogLabelLevel})
+	c.registry.MustRegister(c.logMertics)
 
 	// 初始化连接
 	conn, ch, err := c.Connect("logs", c.GetToken()+"&level="+logLevel)
@@ -44,57 +43,69 @@ func (c *BaseCrash) RegisterLogs(logLevel string) error {
 				c.logger.Errorf("Parse Traffic error: %s\n%s", err, data)
 				continue
 			}
-			c.PrintLog(&obj) // 输出到远程日志
 
-			// 解析日志内容并上报访问计数
-			logType := "normal"
-			target := c.MatchNormalLogTarget(obj.Payload)
+			// 解析日志内容并上报
+			target, logType := c.MatchLogTarget(obj.Payload)
 			if target == nil {
-				logType = "error"
-				target = c.MatchErrorLogTarget(obj.Payload)
-				if target == nil {
-					// TODO: [DNS] grafana.com --> 34.120.177.193
-					c.logger.Warnf("Unknown log: %+v", obj)
-					continue
-				}
+				c.logger.Warnf("Unknown log: %+v", obj)
+				continue
 			}
-			c.logTargetMertics.With(prometheus.Labels{
-				"LT":                       logType,
-				models.LogTargetLabelSrc:   target.Src,
-				models.LogTargetLabelDst:   target.Dst,
-				models.LogTargetLabelMatch: target.Match,
-				models.LogTargetLabelType:  target.Type,
-			}).Inc()
+			c.logger.WithFields(logrus.Fields{
+				"log_type": logType,
+				"src":      target.Src,
+				"dst":      target.Dst,
+				"match":    target.Match,
+				"type":     target.Type,
+			})
+
+			switch obj.Type {
+			case "debug":
+				c.logger.Debugln(obj.Payload)
+			case "info":
+				c.logger.Infoln(obj.Payload)
+			case "warning":
+				c.logger.Warnln(obj.Payload)
+			case "error":
+				c.logger.Errorln(obj.Payload)
+			default:
+				c.logger.Warnf("Unknown level[%s]: %s", obj.Type, obj.Payload)
+			}
+			c.logMertics.With(prometheus.Labels{models.LogLabelLevel: obj.Type}).Inc()
 		}
 	}()
 	return nil
 }
 
-func (c *BaseCrash) PrintLog(obj *models.WSLog) {
-	switch obj.Type {
-	case "debug":
-		c.logger.Debugln(obj.Payload)
-	case "info":
-		c.logger.Infoln(obj.Payload)
-	case "warning":
-		c.logger.Warnln(obj.Payload)
-	case "error":
-		c.logger.Errorln(obj.Payload)
-	default:
-		c.logger.Warnf("Unknown level[%s]: %s", obj.Type, obj.Payload)
-	}
-}
-
-func (c *BaseCrash) MatchNormalLogTarget(message string) *models.LogTarget {
-	matches := reNormalLog.FindStringSubmatch(message)
-	names := reNormalLog.SubexpNames()
-	if matches == nil {
-		// try DNS
+func (c *BaseCrash) MatchLogTarget(message string) (*models.LogTarget, string) {
+	var matches []string
+	var names []string
+	var logType string
+	for {
+		// DNS
 		matches = reDNSLog.FindStringSubmatch(message)
-		names = reDNSLog.SubexpNames()
-	}
-	if matches == nil {
-		return nil
+		if matches != nil {
+			names = reDNSLog.SubexpNames()
+			logType = models.LogTypeDNS
+			break
+		}
+
+		// Normal
+		matches = reNormalLog.FindStringSubmatch(message)
+		if matches != nil {
+			names = reNormalLog.SubexpNames()
+			logType = models.LogTypeNormal
+			break
+		}
+
+		// Error
+		matches = reErrorLog.FindStringSubmatch(message)
+		if matches != nil {
+			names = reErrorLog.SubexpNames()
+			logType = models.LogTypeError
+			break
+		}
+
+		return nil, "" //nolint:staticcheck // no match
 	}
 
 	result := &models.LogTarget{
@@ -112,28 +123,5 @@ func (c *BaseCrash) MatchNormalLogTarget(message string) *models.LogTarget {
 			result.Type = value
 		}
 	}
-	return result
-}
-
-func (c *BaseCrash) MatchErrorLogTarget(message string) *models.LogTarget {
-	matches := reErrorLog.FindStringSubmatch(message)
-	if matches == nil {
-		return nil
-	}
-
-	result := &models.LogTarget{}
-	names := reErrorLog.SubexpNames()
-	for i, value := range matches {
-		switch names[i] {
-		case "src":
-			result.Src = value
-		case "dst":
-			result.Dst = value
-		case "match":
-			result.Match = value
-		case "type":
-			result.Type = value
-		}
-	}
-	return result
+	return result, logType
 }

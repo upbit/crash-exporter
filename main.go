@@ -3,6 +3,7 @@ package main
 import (
 	"crash_exporter/websocket"
 	"flag"
+	"fmt"
 	"log"
 	"net/http"
 	"time"
@@ -33,6 +34,14 @@ func parseFlags() Flags {
 	return flags
 }
 
+func dynamicLabelProvider(entry *logrus.Entry) lokirus.Labels {
+	labels := make(lokirus.Labels, len(entry.Data))
+	for k, v := range entry.Data {
+		labels[k] = fmt.Sprintf("%+v", v)
+	}
+	return labels
+}
+
 func getLoggerWithLoki(lokiAddr string) *logrus.Logger {
 	// Configure the Loki hook
 	opts := lokirus.NewLokiHookOptions().
@@ -42,6 +51,7 @@ func getLoggerWithLoki(lokiAddr string) *logrus.Logger {
 		WithStaticLabels(lokirus.Labels{
 			"service_name": "crash-exporter",
 		}).
+		WithDynamicLabelProvider(dynamicLabelProvider).
 		WithFormatter(&logrus.JSONFormatter{})
 
 	hook := lokirus.NewLokiHookWithOpts(

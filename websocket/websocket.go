@@ -20,7 +20,7 @@ type BaseCrash struct {
 	registry            *prometheus.Registry
 	trafficMetrics      prometheus.CounterVec
 	trafficTotalMetrics prometheus.GaugeVec
-	logTargetMertics    prometheus.CounterVec
+	logMertics          prometheus.CounterVec
 }
 
 // NewCrash 初始化Crash的链接。

@@ -1,5 +1,11 @@
 package models
 
+const (
+	LogTypeDNS    = "DNS"
+	LogTypeNormal = "Normal"
+	LogTypeError  = "Error"
+)
+
 // WSLog 日志相关信息提取。
 type WSLog struct {
 	Type    string `json:"type"`
