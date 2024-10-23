@@ -43,6 +43,7 @@ func (c *BaseCrash) RegisterLogs(logLevel string) error {
 				c.logger.Errorf("Parse Traffic error: %s\n%s", err, data)
 				continue
 			}
+			c.logMertics.With(prometheus.Labels{models.LogLabelLevel: obj.Type}).Inc()
 
 			// 解析日志内容并上报
 			target, logType := c.MatchLogTarget(obj.Payload)
@@ -50,27 +51,25 @@ func (c *BaseCrash) RegisterLogs(logLevel string) error {
 				c.logger.Warnf("Unknown log: %+v", obj)
 				continue
 			}
-			c.logger.WithFields(logrus.Fields{
+			finalLogger := c.logger.WithFields(logrus.Fields{
 				"log_type": logType,
 				"src":      target.Src,
 				"dst":      target.Dst,
 				"match":    target.Match,
 				"type":     target.Type,
 			})
-
 			switch obj.Type {
 			case "debug":
-				c.logger.Debugln(obj.Payload)
+				finalLogger.Debugln(obj.Payload)
 			case "info":
-				c.logger.Infoln(obj.Payload)
+				finalLogger.Infoln(obj.Payload)
 			case "warning":
-				c.logger.Warnln(obj.Payload)
+				finalLogger.Warnln(obj.Payload)
 			case "error":
-				c.logger.Errorln(obj.Payload)
+				finalLogger.Errorln(obj.Payload)
 			default:
-				c.logger.Warnf("Unknown level[%s]: %s", obj.Type, obj.Payload)
+				finalLogger.Warnf("Unknown level[%s]: %s", obj.Type, obj.Payload)
 			}
-			c.logMertics.With(prometheus.Labels{models.LogLabelLevel: obj.Type}).Inc()
 		}
 	}()
 	return nil
