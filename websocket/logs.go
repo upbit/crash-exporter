@@ -11,9 +11,9 @@ import (
 )
 
 var (
-	reNormalLog = regexp.MustCompile(`(?P<src>[\d.]+:\d+) --> (?P<dst>[^\s]+) match (?P<match>[^\s]+) using (?P<type>[^\[]+)`)   //nolint:lll
+	reNormalLog = regexp.MustCompile(`(?P<src>[\d.]+):\d+ --> (?P<dst>[^\s]+) match (?P<match>[^\s]+) using (?P<type>[^\[]+)`)   //nolint:lll
 	reErrorLog  = regexp.MustCompile(`dial (?P<type>[^\[\s]+)[^\)]+\) to (?P<dst>[^\s]+) error: [^:]+:[^:]+: (?P<match>[^\n]+)`) //nolint:lll
-	reDNSLog    = regexp.MustCompile(`\[(?P<match>DNS)\] (?P<dst>[^\s]+) -->`)
+	reDNSLog    = regexp.MustCompile(`\[(?P<type>DNS)\] (resolve ){0,1}(?P<dst>[^\s]+) (error:|-->) (?P<match>.*$)`)
 )
 
 // RegisterLogs 订阅日志推送。
