@@ -21,8 +21,22 @@ jobs:
       with:
         go-version: '1.23'
 
-    - name: Tools
+    - name: Install tools
       run: make tools
 
     - name: Build
-      run: make all
+      run: make
+
+    - name: Test
+      run: make test
+
+    - name: Package
+      run: make package
+
+    - name : Upload packages
+      uses: actions/upload-artifact@master
+      with:
+        name: Padavan-build-RM2100
+        path: |
+          ./crash_exporter.linux-amd64.tar.gz
+          ./crash_exporter.linux-arm64.tar.gz
