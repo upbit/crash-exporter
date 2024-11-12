@@ -36,7 +36,7 @@ jobs:
     - name : Upload packages
       uses: actions/upload-artifact@master
       with:
-        name: Padavan-build-RM2100
+        name: crash-exporter downloads
         path: |
           ./crash_exporter.linux-amd64.tar.gz
           ./crash_exporter.linux-arm64.tar.gz

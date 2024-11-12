@@ -64,7 +64,7 @@ doc:
 	godoc -http=:8080 -index
 
 tools:
-	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b ${GOPATH}/bin latest
+	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(shell go env GOPATH)/bin latest
 	go install golang.org/x/tools/cmd/godoc@latest
 	go install golang.org/x/tools/cmd/goimports@latest
 	go install github.com/axw/gocov/gocov@latest
