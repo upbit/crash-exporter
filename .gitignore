@@ -26,4 +26,4 @@ go.work.sum
 
 # User define
 coverage.html
-crash_exporter
+crash_exporter.linux-*

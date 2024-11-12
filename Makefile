@@ -39,10 +39,16 @@ fmt:
 
 clean:
 	go clean
+	rm -f $(TARGET).*
 	@rm -f coverage.out coverage.html
 
 build:
-	go build -v -ldflags "$(LDFLAGS)" -o "$(TARGET)" .
+	GOOS=linux GOARCH=amd64 go build -v -ldflags "$(LDFLAGS)" -o "$(TARGET).linux-amd64" .
+	GOOS=linux GOARCH=arm64 go build -v -ldflags "$(LDFLAGS)" -o "$(TARGET).linux-arm64" .
+
+package:
+	mv $(TARGET).linux-amd64 $(TARGET) && tar czfv $(TARGET).linux-amd64.tar.gz $(TARGET) && rm $(TARGET)
+	mv $(TARGET).linux-arm64 $(TARGET) && tar czfv $(TARGET).linux-arm64.tar.gz $(TARGET) && rm $(TARGET)
 
 test:
 	go test -v ./...
@@ -58,7 +64,7 @@ doc:
 	godoc -http=:8080 -index
 
 tools:
-	# curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.61.0
+	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(shell go env GOPATH)/bin latest
 	go install golang.org/x/tools/cmd/godoc@latest
 	go install golang.org/x/tools/cmd/goimports@latest
 	go install github.com/axw/gocov/gocov@latest
